@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import axios from 'axios';
-import uuid from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 
 import Joke from './Joke';
 
@@ -15,6 +15,8 @@ export default class JokeList extends Component {
             jokes: JSON.parse(window.localStorage.getItem('jokes') || '[]'),
             loading: false
         };
+        this.seenJokes = new Set(this.state.jokes.map(j => j.text));
+        console.log(this.seenJokes);
     }
     async componentDidMount() {
         if (this.state.jokes.length === 0) {
@@ -22,29 +24,40 @@ export default class JokeList extends Component {
         }
     }
     async getJokes() {
-        // Load Jokes
-        let jokes = [];
-        while (jokes.length < this.props.numJokesToGet) {
-            let res = await axios.get('https://icanhazdadjoke.com/', {
-                headers: { accept: 'application/json' }
-            });
-            jokes.push({
-                id: uuid(),
-                text: res.data.joke,
-                votes: 0
-            });
+        try {
+            // Load Jokes
+            let jokes = [];
+            while (jokes.length < this.props.numJokesToGet) {
+                let res = await axios.get('https://icanhazdadjoke.com/', {
+                    headers: { accept: 'application/json' }
+                });
+                const newJoke = res.data.joke;
+                if (!this.seenJokes.has(newJoke)) {
+                    jokes.push({
+                        id: uuidv4(),
+                        text: res.data.joke,
+                        votes: 0
+                    });
+                } else {
+                    console.log('Found a Duplicate');
+                    console.log(newJoke);
+                }
+            }
+            this.setState(
+                st => ({
+                    loading: false,
+                    jokes: [...st.jokes, ...jokes]
+                }),
+                () =>
+                    window.localStorage.setItem(
+                        'jokes',
+                        JSON.stringify(this.state.jokes)
+                    )
+            );
+        } catch (err) {
+            alert(err);
+            this.setState({ loading: false });
         }
-        this.setState(
-            st => ({
-                loading: false,
-                jokes: [...st.jokes, ...jokes]
-            }),
-            () =>
-                window.localStorage.setItem(
-                    'jokes',
-                    JSON.stringify(this.state.jokes)
-                )
-        );
     }
     handleVote = (id, delta) => {
         this.setState(
@@ -72,6 +85,7 @@ export default class JokeList extends Component {
                 </div>
             );
         }
+        let jokes = this.state.jokes.sort((a, b) => b.votes - a.votes);
         return (
             <div className="JokeList">
                 <div className="JokeList-sidebar">
@@ -88,11 +102,11 @@ export default class JokeList extends Component {
                         className="JokeList-getmore"
                         onClick={this.handleClick}
                     >
-                        New Jokes
+                        Fetch Jokes
                     </button>
                 </div>
                 <div className="JokeList-jokes">
-                    {this.state.jokes.map(j => (
+                    {jokes.map(j => (
                         <Joke
                             key={j.id}
                             votes={j.votes}
